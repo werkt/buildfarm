@@ -1,3 +1,3 @@
-src/main/java/build/** linguist-generated=false
-src/main/protobuf/build/** linguist-generated=false
-src/test/java/build/** linguist-generated=false
+src/main/java/build -linguist-generated -linguist-vendored
+src/main/java/build/ -linguist-generated -linguist-vendored
+src/main/java/build/** -linguist-generated -linguist-vendored
