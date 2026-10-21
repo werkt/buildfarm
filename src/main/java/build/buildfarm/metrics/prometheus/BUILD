@@ -8,6 +8,8 @@ java_library(
     plugins = ["//src/main/java/build/buildfarm/common:lombok"],
     visibility = ["//visibility:public"],
     deps = [
+        "//src/main/java/build/buildfarm/common/redis",
+        "//src/main/protobuf/build/buildfarm/v1test:buildfarm_java_proto",
         "@buildfarm_maven//:io_prometheus_simpleclient",
         "@buildfarm_maven//:io_prometheus_simpleclient_hotspot",
         "@buildfarm_maven//:io_prometheus_simpleclient_httpserver",

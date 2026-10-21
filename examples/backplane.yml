@@ -1,2 +1,2 @@
-redisUri: redis://localhost:6379
+type: FILESYSTEM
 queues: !include "queues.yml"

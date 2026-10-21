@@ -31,6 +31,7 @@ import build.buildfarm.instance.Instance;
 import build.buildfarm.instance.shard.ServerInstance;
 import build.buildfarm.metrics.prometheus.PrometheusPublisher;
 import build.buildfarm.server.services.ActionCacheService;
+import build.buildfarm.server.services.ActionPlannerService;
 import build.buildfarm.server.services.CapabilitiesService;
 import build.buildfarm.server.services.ExecutionService;
 import build.buildfarm.server.services.FetchService;
@@ -79,6 +80,7 @@ public class BuildFarmServer extends LoggingMain {
   private AtomicBoolean released = new AtomicBoolean(true);
   private InvocationsCollector invocationsCollector;
   private Thread invocationsCollectorThread;
+  private PrometheusPublisher prometheusPublisher;
 
   BuildFarmServer() {
     super("BuildFarmServer");
@@ -164,6 +166,7 @@ public class BuildFarmServer extends LoggingMain {
         .addService(ProtoReflectionService.newInstance())
         .addService(new PublishBuildEventService())
         .addService(new WorkerProfileService(instance))
+        .addService(new ActionPlannerService(instance))
         .intercept(TransmitStatusRuntimeExceptionInterceptor.instance())
         .intercept(headersInterceptor);
     if (configs.getServer().isGrpcChannelz()) {
@@ -186,7 +189,8 @@ public class BuildFarmServer extends LoggingMain {
 
     healthStatusManager.setStatus(
         HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.SERVING);
-    PrometheusPublisher.startHttpServer(configs.getPrometheusPort());
+    prometheusPublisher = new PrometheusPublisher(instance::backplaneStatus);
+    prometheusPublisher.startHttpServer(configs.getPrometheusPort());
     healthCheckMetric.labels("start").inc();
   }
 
@@ -212,7 +216,7 @@ public class BuildFarmServer extends LoggingMain {
       healthStatusManager.setStatus(
           HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.NOT_SERVING);
     }
-    PrometheusPublisher.stopHttpServer();
+    prometheusPublisher.stopHttpServer();
     healthCheckMetric.labels("stop").inc();
     try {
       initiateShutdown();

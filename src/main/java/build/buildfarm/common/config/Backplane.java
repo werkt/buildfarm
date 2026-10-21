@@ -15,6 +15,7 @@
 package build.buildfarm.common.config;
 
 import com.google.common.base.Strings;
+import java.nio.file.Path;
 import java.net.URI;
 import lombok.Data;
 import lombok.ToString;
@@ -25,11 +26,13 @@ import redis.clients.jedis.util.JedisURIHelper;
 @Data
 public class Backplane {
   public enum BACKPLANE_TYPE {
-    SHARD
+    SHARD,
+    FILESYSTEM,
   }
 
   private BACKPLANE_TYPE type = BACKPLANE_TYPE.SHARD;
   private String redisUri;
+  private String root = "/tmp/server";
   private int jedisPoolMaxTotal = 200;
   private int jedisPoolMaxIdle = 8;
   private int jedisPoolMinIdle = 0;
@@ -171,5 +174,9 @@ public class Backplane {
     }
 
     return Strings.emptyToNull(redisPassword);
+  }
+
+  public Path getValidRoot() {
+    return Path.of(root);
   }
 }

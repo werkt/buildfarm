@@ -21,7 +21,6 @@ import static build.buildfarm.common.Actions.checkPreconditionFailure;
 import static build.buildfarm.common.Actions.invalidActionVerboseMessage;
 import static build.buildfarm.common.Errors.VIOLATION_TYPE_INVALID;
 import static build.buildfarm.common.Errors.VIOLATION_TYPE_MISSING;
-import static build.buildfarm.common.config.Backplane.BACKPLANE_TYPE.SHARD;
 import static build.buildfarm.instance.shard.Util.SHARD_IS_RETRIABLE;
 import static build.buildfarm.instance.shard.Util.correctMissingBlob;
 import static com.google.common.base.Preconditions.checkState;
@@ -74,6 +73,7 @@ import build.bazel.remote.execution.v2.ToolDetails;
 import build.buildfarm.actioncache.ActionCache;
 import build.buildfarm.actioncache.ShardActionCache;
 import build.buildfarm.backplane.Backplane;
+import build.buildfarm.backplane.FileSystemBackplane;
 import build.buildfarm.common.BuildfarmExecutors;
 import build.buildfarm.common.CasIndexResults;
 import build.buildfarm.common.DigestUtil;
@@ -92,7 +92,6 @@ import build.buildfarm.common.Write;
 import build.buildfarm.common.config.BuildfarmConfigs;
 import build.buildfarm.common.function.CountingConsumer;
 import build.buildfarm.common.grpc.UniformDelegateServerCallStreamObserver;
-import build.buildfarm.common.redis.RedisHashtags;
 import build.buildfarm.instance.Instance;
 import build.buildfarm.instance.server.Filter;
 import build.buildfarm.instance.server.NodeInstance;
@@ -106,7 +105,6 @@ import build.buildfarm.v1test.GetClientStartTimeRequest;
 import build.buildfarm.v1test.GetClientStartTimeResult;
 import build.buildfarm.v1test.ProfiledQueuedOperationMetadata;
 import build.buildfarm.v1test.QueueEntry;
-import build.buildfarm.v1test.QueueStatus;
 import build.buildfarm.v1test.QueuedOperation;
 import build.buildfarm.v1test.QueuedOperationMetadata;
 import build.buildfarm.v1test.Tree;
@@ -148,7 +146,6 @@ import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
 import io.prometheus.client.Histogram;
 import java.io.IOException;
 import java.io.InputStream;
@@ -202,8 +199,6 @@ public class ServerInstance extends NodeInstance {
       Counter.build().name("execution_success").help("Execution success.").register();
   private static final Counter mergedExecutions =
       Counter.build().name("merged_executions").help("Merged executions.").register();
-  private static final Gauge preQueueSize =
-      Gauge.build().name("pre_queue_size").help("Pre queue size.").register();
   private static final Counter casHitCounter =
       Counter.build()
           .name("cas_hit")
@@ -221,28 +216,6 @@ public class ServerInstance extends NodeInstance {
           .name("queue_failure")
           .help("Number of operations that failed to queue.")
           .register();
-  // Metrics about the dispatched operations
-  private static final Gauge dispatchedOperationsSize =
-      Gauge.build()
-          .name("dispatched_operations_size")
-          .help("Dispatched operations size.")
-          .register();
-
-  // Other metrics from the backplane
-  private static final Gauge workerPoolSize =
-      Gauge.build().name("worker_pool_size").help("Active worker pool size.").register();
-  private static final Gauge storageWorkerPoolSize =
-      Gauge.build()
-          .name("storage_worker_pool_size")
-          .help("Active storage worker pool size.")
-          .register();
-  private static final Gauge executeWorkerPoolSize =
-      Gauge.build()
-          .name("execute_worker_pool_size")
-          .help("Active execute worker pool size.")
-          .register();
-  private static final Gauge queueSize =
-      Gauge.build().name("queue_size").labelNames("queue_name").help("Queue size.").register();
 
   private static final Histogram ioMetric =
       Histogram.build()
@@ -295,19 +268,21 @@ public class ServerInstance extends NodeInstance {
   private Thread operationQueuer;
   private boolean stopping = false;
   private boolean stopped = true;
-  private final Thread prometheusMetricsThread;
 
   private static BuildfarmConfigs configs = BuildfarmConfigs.getInstance();
 
   private static Backplane createBackplane(String identifier) throws ConfigurationException {
-    if (configs.getBackplane().getType().equals(SHARD)) {
+    switch (configs.getBackplane().getType()) {
+    case SHARD:
       return new RedisShardBackplane(
           identifier,
           /* subscribeToBackplane= */ true,
           configs.getServer().isRunFailsafeOperation(),
           ServerInstance::stripExecution,
           ShardCodec.DEFAULT_CODEC);
-    } else {
+    case FILESYSTEM:
+      return new FileSystemBackplane(configs.getBackplane().getValidRoot());
+    default:
       throw new IllegalArgumentException("Shard Backplane not set in config");
     }
   }
@@ -692,39 +667,6 @@ public class ServerInstance extends NodeInstance {
       operationQueuer = null;
       transformPollerExecutor = null;
     }
-
-    prometheusMetricsThread =
-        new Thread(
-            () -> {
-              while (!Thread.currentThread().isInterrupted()) {
-                try {
-                  TimeUnit.SECONDS.sleep(30);
-                  BackplaneStatus backplaneStatus = backplaneStatus();
-                  workerPoolSize.set(backplaneStatus.getActiveWorkersCount());
-                  executeWorkerPoolSize.set(backplaneStatus.getActiveExecuteWorkersCount());
-                  storageWorkerPoolSize.set(backplaneStatus.getActiveStorageWorkersCount());
-                  dispatchedOperationsSize.set(backplaneStatus.getDispatchedSize());
-                  preQueueSize.set(backplaneStatus.getPrequeue().getSize());
-                  updateQueueSizes(backplaneStatus.getOperationQueue().getProvisionsList());
-                } catch (InterruptedException e) {
-                  Thread.currentThread().interrupt();
-                  break;
-                } catch (Exception e) {
-                  log.log(Level.SEVERE, "Could not update RedisShardBackplane metrics", e);
-                }
-              }
-            },
-            "Prometheus Metrics Collector");
-  }
-
-  private void updateQueueSizes(List<QueueStatus> queues) {
-    if (queueSize != null) {
-      for (QueueStatus queueStatus : queues) {
-        queueSize
-            .labels(RedisHashtags.unhashedName(queueStatus.getName()))
-            .set(queueStatus.getSize());
-      }
-    }
   }
 
   private void ensureCanQueue(Stopwatch stopwatch) throws IOException, InterruptedException {
@@ -754,10 +696,6 @@ public class ServerInstance extends NodeInstance {
     if (operationQueuer != null) {
       operationQueuer.start();
     }
-
-    if (prometheusMetricsThread != null) {
-      prometheusMetricsThread.start();
-    }
   }
 
   @Override
@@ -775,9 +713,6 @@ public class ServerInstance extends NodeInstance {
     if (dispatchedMonitor != null) {
       dispatchedMonitor.interrupt();
       dispatchedMonitor.join();
-    }
-    if (prometheusMetricsThread != null) {
-      prometheusMetricsThread.interrupt();
     }
     contextDeadlineScheduler.shutdown();
     operationDeletionService.shutdown();
