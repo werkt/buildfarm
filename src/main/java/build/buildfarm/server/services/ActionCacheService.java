@@ -154,7 +154,7 @@ public class ActionCacheService extends ActionCacheGrpc.ActionCacheImplBase {
 
     ActionResult actionResult = request.getActionResult();
     try {
-      instance.putActionResult(DigestUtil.asActionKey(actionDigest), actionResult);
+      instance.putActionResult(DigestUtil.asActionKey(actionDigest), actionResult, TracingMetadataUtils.fromCurrentContext());
 
       responseObserver.onNext(actionResult);
       responseObserver.onCompleted();

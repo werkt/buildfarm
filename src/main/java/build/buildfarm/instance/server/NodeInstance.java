@@ -409,7 +409,7 @@ public abstract class NodeInstance extends InstanceBase {
   }
 
   @Override
-  public void putActionResult(ActionKey actionKey, ActionResult actionResult)
+  public void putActionResult(ActionKey actionKey, ActionResult actionResult, RequestMetadata requestMetadata)
       throws InterruptedException {
     if (actionResult.getExitCode() == 0) {
       actionCache.put(actionKey, actionResult);

@@ -224,7 +224,7 @@ public final class Worker extends LoggingMain {
   private AtomicBoolean shutdownInitiated = new AtomicBoolean(false);
   private boolean startWritable = true;
   private SdkTracerProvider oTelSdkTracerProvider;
-  private final PrometheusPublisher prometheusPublisher = new PrometheusPublisher();
+  private final PrometheusPublisher prometheusPublisher = new PrometheusPublisher(() -> null);
 
   /**
    * The method will prepare the worker for graceful shutdown when the worker is ready. Note on
@@ -756,7 +756,11 @@ public final class Worker extends LoggingMain {
               this::stripOperation,
               ShardCodec.DEFAULT_CODEC);
       backplane.start(configs.getWorker().getPublicName(), workerStubs::invalidate);
-    } else {
+      break;
+    case FILESYSTEM:
+      backplane = new FileSystemBackplane(configs.getBackplane().getValidRoot(), /* instance= */ null);
+      break;
+    default:
       throw new IllegalArgumentException("Shard Backplane not set in config");
     }
 

@@ -65,7 +65,7 @@ public interface Instance {
   ListenableFuture<ActionResult> getActionResult(
       ActionKey actionKey, RequestMetadata requestMetadata);
 
-  void putActionResult(ActionKey actionKey, ActionResult actionResult) throws InterruptedException;
+  void putActionResult(ActionKey actionKey, ActionResult actionResult, RequestMetadata requestMetadata) throws InterruptedException;
 
   ListenableFuture<Iterable<Digest>> findMissingBlobs(
       Iterable<Digest> digests,

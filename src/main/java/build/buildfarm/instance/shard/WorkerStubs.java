@@ -76,7 +76,7 @@ public final class WorkerStubs {
     return channel;
   }
 
-  private static StubInstance newStubInstance(String worker, Duration timeout) {
+  static StubInstance newStubInstance(String worker, Duration timeout) {
     AtomicInteger active = new AtomicInteger(2); // one for each channel
     SettableFuture<Void> idle = SettableFuture.create();
     Runnable onAllIdle = () -> idle.set(null);
