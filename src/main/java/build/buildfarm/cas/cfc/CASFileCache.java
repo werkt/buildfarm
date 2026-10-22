@@ -2647,6 +2647,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
         // open
         SkipOutputStream skipStream =
             new SkipOutputStream(Files.newOutputStream(writePath, APPEND), committedSize);
+
         hashOut = digestUtil.newHashingOutputStream(skipStream);
         ByteStreams.copy(in, hashOut);
         in.close();
