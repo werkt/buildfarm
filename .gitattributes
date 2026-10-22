@@ -1,3 +1,1 @@
-src/main/java/build -linguist-generated -linguist-vendored
-src/main/java/build/ -linguist-generated -linguist-vendored
-src/main/java/build/** -linguist-generated -linguist-vendored
+src/** linguist-generated=false
