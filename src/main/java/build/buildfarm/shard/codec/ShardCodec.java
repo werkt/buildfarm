@@ -1,4 +1,4 @@
-// Copyright 2022-2026 The Buildfarm Authors. All rights reserved.
+// Copyright 2026 The Buildfarm Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package build.buildfarm.actioncache;
+package build.buildfarm.shard.codec;
 
-import build.bazel.remote.execution.v2.ActionResult;
-import build.buildfarm.common.DigestUtil.ActionKey;
-import com.google.common.util.concurrent.ListenableFuture;
+import build.buildfarm.common.redis.Codec;
+import build.buildfarm.instance.shard.codec.b64.B64Codec;
+import build.buildfarm.instance.shard.codec.failover.FailoverCodec;
+import build.buildfarm.instance.shard.codec.json.JsonCodec;
+import java.util.logging.Level;
 
-public interface ActionCache {
-  ListenableFuture<ActionResult> get(ActionKey actionKey);
+public final class ShardCodec {
+  public static final Codec DEFAULT_CODEC =
+      FailoverCodec.create(B64Codec.create(Level.FINEST), JsonCodec.CODEC);
 
-  void put(ActionKey actionKey, ActionResult actionResult) throws InterruptedException;
-
-  void invalidate(ActionKey actionKey);
-
-  void readThrough(ActionKey actionKey, ActionResult actionResult);
+  private ShardCodec() {}
 }

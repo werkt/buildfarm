@@ -64,7 +64,7 @@ import build.bazel.remote.execution.v2.RequestMetadata;
 import build.bazel.remote.execution.v2.ServerCapabilities;
 import build.bazel.remote.execution.v2.SymlinkAbsolutePathStrategy;
 import build.bazel.remote.execution.v2.SymlinkNode;
-import build.buildfarm.actioncache.ActionCache;
+import build.buildfarm.ac.ActionCache;
 import build.buildfarm.cas.ContentAddressableStorage;
 import build.buildfarm.cas.ContentAddressableStorage.Blob;
 import build.buildfarm.cas.DigestMismatchException;
@@ -410,7 +410,7 @@ public abstract class NodeInstance extends InstanceBase {
 
   @Override
   public void putActionResult(ActionKey actionKey, ActionResult actionResult, RequestMetadata requestMetadata)
-      throws InterruptedException {
+      throws IOException, InterruptedException {
     if (actionResult.getExitCode() == 0) {
       actionCache.put(actionKey, actionResult);
     }

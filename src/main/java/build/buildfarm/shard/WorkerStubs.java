@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package build.buildfarm.instance.shard;
+package build.buildfarm.shard;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
@@ -31,9 +31,13 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.Duration;
 import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import lombok.extern.java.Log;
 
+@Log
 public final class WorkerStubs {
   private WorkerStubs() {}
 
@@ -115,6 +119,19 @@ public final class WorkerStubs {
       instance.stop();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  public static Instance get(LoadingCache<String, ? extends Instance> stubs, String worker) {
+    try {
+      Instance instance = stubs.get(worker);
+      if (instance instanceof StubInstance stubInstance) {
+        stubInstance.setOnStopped(() -> stubs.invalidate(worker));
+      }
+      return instance;
+    } catch (ExecutionException e) {
+      log.log(Level.SEVERE, "error getting worker stub for " + worker, e);
+      throw new IllegalStateException("stub instance creation must not fail");
     }
   }
 }

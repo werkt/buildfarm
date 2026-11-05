@@ -1,12 +1,12 @@
 load("@rules_java//java:java_library.bzl", "java_library")
 
 java_library(
-    name = "shard",
+    name = "instance",
     srcs = glob(["**/*.java"]),
     plugins = ["//src/main/java/build/buildfarm/common:lombok"],
     visibility = ["//visibility:public"],
     deps = [
-        "//src/main/java/build/buildfarm/actioncache",
+        "//src/main/java/build/buildfarm/ac",
         "//src/main/java/build/buildfarm/backplane",
         "//src/main/java/build/buildfarm/cas",
         "//src/main/java/build/buildfarm/common",
@@ -18,6 +18,8 @@ java_library(
         "//src/main/java/build/buildfarm/instance/server",
         "//src/main/java/build/buildfarm/instance/stub",
         "//src/main/java/build/buildfarm/metrics/prometheus",
+        "//src/main/java/build/buildfarm/shard",
+        "//src/main/java/build/buildfarm/shard/ac",
         "//src/main/java/build/buildfarm/worker/resources",
         "//src/main/protobuf/build/buildfarm/v1test:buildfarm_java_proto",
         "@buildfarm_maven//:com_github_ben_manes_caffeine_caffeine",

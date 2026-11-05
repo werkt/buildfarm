@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package build.buildfarm.instance.shard;
+package build.buildfarm.shard;
 
-import static build.buildfarm.instance.shard.Util.SHARD_IS_RETRIABLE;
-import static build.buildfarm.instance.shard.Util.correctMissingBlob;
+import static build.buildfarm.shard.Util.SHARD_IS_RETRIABLE;
+import static build.buildfarm.shard.Util.correctMissingBlob;
 import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.google.common.util.concurrent.Futures.transform;
@@ -30,8 +30,8 @@ import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.InputStreamFactory;
 import build.buildfarm.common.config.BuildfarmConfigs;
 import build.buildfarm.instance.Instance;
-import build.buildfarm.instance.shard.ServerInstance.WorkersCallback;
 import build.buildfarm.instance.stub.StubInstance;
+import build.buildfarm.shard.WorkersCallback;
 import build.buildfarm.v1test.Digest;
 import com.google.common.base.Throwables;
 import com.google.common.cache.LoadingCache;

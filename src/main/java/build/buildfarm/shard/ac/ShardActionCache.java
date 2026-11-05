@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package build.buildfarm.actioncache;
+package build.buildfarm.shard.ac;
 
 import static com.google.common.util.concurrent.Futures.catching;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
@@ -20,6 +20,7 @@ import static net.javacrumbs.futureconverter.java8guava.FutureConverter.toComple
 import static net.javacrumbs.futureconverter.java8guava.FutureConverter.toListenableFuture;
 
 import build.bazel.remote.execution.v2.ActionResult;
+import build.buildfarm.ac.ActionCache;
 import build.buildfarm.backplane.Backplane;
 import build.buildfarm.common.DigestUtil.ActionKey;
 import com.github.benmanes.caffeine.cache.AsyncCacheLoader;

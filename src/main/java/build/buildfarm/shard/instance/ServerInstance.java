@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package build.buildfarm.instance.shard;
+package build.buildfarm.shard.instance;
 
 import static build.buildfarm.cas.ContentAddressableStorage.NOT_FOUND;
 import static build.buildfarm.cas.ContentAddressableStorage.OK;
@@ -21,8 +21,8 @@ import static build.buildfarm.common.Actions.checkPreconditionFailure;
 import static build.buildfarm.common.Actions.invalidActionVerboseMessage;
 import static build.buildfarm.common.Errors.VIOLATION_TYPE_INVALID;
 import static build.buildfarm.common.Errors.VIOLATION_TYPE_MISSING;
-import static build.buildfarm.instance.shard.Util.SHARD_IS_RETRIABLE;
-import static build.buildfarm.instance.shard.Util.correctMissingBlob;
+import static build.buildfarm.shard.Util.SHARD_IS_RETRIABLE;
+import static build.buildfarm.shard.Util.correctMissingBlob;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Throwables.throwIfUnchecked;
 import static com.google.common.util.concurrent.Futures.addCallback;
@@ -69,8 +69,9 @@ import build.bazel.remote.execution.v2.RequestMetadata;
 import build.bazel.remote.execution.v2.ResultsCachePolicy;
 import build.bazel.remote.execution.v2.SymlinkAbsolutePathStrategy;
 import build.bazel.remote.execution.v2.ToolDetails;
-import build.buildfarm.actioncache.ActionCache;
-import build.buildfarm.actioncache.ShardActionCache;
+import build.buildfarm.ac.ActionCache;
+import build.buildfarm.shard.RemoteInputStreamFactory;
+import build.buildfarm.shard.ac.ShardActionCache;
 import build.buildfarm.backplane.Backplane;
 import build.buildfarm.backplane.FileSystemBackplane;
 import build.buildfarm.common.BuildfarmExecutors;
@@ -94,8 +95,8 @@ import build.buildfarm.common.grpc.UniformDelegateServerCallStreamObserver;
 import build.buildfarm.instance.Instance;
 import build.buildfarm.instance.server.Filter;
 import build.buildfarm.instance.server.NodeInstance;
-import build.buildfarm.instance.shard.codec.ShardCodec;
 import build.buildfarm.instance.stub.StubInstance;
+import build.buildfarm.shard.codec.ShardCodec;
 import build.buildfarm.metrics.prometheus.PrometheusPublisher;
 import build.buildfarm.v1test.BackplaneStatus;
 import build.buildfarm.v1test.BatchWorkerProfilesResponse;
@@ -295,6 +296,8 @@ public class ServerInstance extends NodeInstance {
         name,
         createBackplane(identifier),
         onStop,
+        WorkerStubs.create(
+            Duration.newBuilder().setSeconds(configs.getServer().getGrpcTimeout()).build()),
         /* actionCacheFetchService= */ BuildfarmExecutors.getActionCacheFetchServicePool());
   }
 
@@ -302,14 +305,16 @@ public class ServerInstance extends NodeInstance {
       String name,
       Backplane backplane,
       Runnable onStop,
+      LoadingCache<String, StubInstance> workerStubs,
       ListeningExecutorService actionCacheFetchService)
       throws InterruptedException {
     this(
         name,
         backplane,
-        new ShardActionCache(
+        new WorkerShardActionCache(
             configs.getServer().getCaches().getActionCacheMaxEntries(),
             backplane,
+            workerStubs,
             actionCacheFetchService),
         configs.getServer().isRunDispatchedMonitor(),
         configs.getServer().getDispatchedMonitorIntervalSeconds(),
@@ -321,8 +326,7 @@ public class ServerInstance extends NodeInstance {
         configs.getServer().isUseDenyList(),
         configs.getServer().isMergeExecutions(),
         onStop,
-        WorkerStubs.create(
-            Duration.newBuilder().setSeconds(configs.getServer().getGrpcTimeout()).build()),
+        workerStubs,
         actionCacheFetchService,
         configs.getServer().isEnsureOutputsPresent());
   }
@@ -1386,26 +1390,6 @@ public class ServerInstance extends NodeInstance {
         directExecutor());
   }
 
-  public abstract static class WorkersCallback implements FutureCallback<List<String>> {
-    private final Random rand;
-
-    public WorkersCallback(Random rand) {
-      this.rand = rand;
-    }
-
-    @Override
-    public void onSuccess(List<String> workersList) {
-      if (workersList.isEmpty()) {
-        onFailure(Status.NOT_FOUND.withDescription("No workers found.").asException());
-      } else {
-        Collections.shuffle(workersList, rand);
-        onQueue(new ArrayDeque<>(workersList));
-      }
-    }
-
-    protected abstract void onQueue(Deque<String> workers);
-  }
-
   private Instance writeInstanceSupplier() {
     String worker = getRandomWritingWorker();
     return workerStub(worker);
@@ -1422,14 +1406,7 @@ public class ServerInstance extends NodeInstance {
   }
 
   private Instance workerStub(String worker) {
-    try {
-      StubInstance stubInstance = workerStubs.get(worker);
-      stubInstance.setOnStopped(() -> workerStubs.invalidate(worker));
-      return stubInstance;
-    } catch (ExecutionException e) {
-      log.log(Level.SEVERE, "error getting worker stub for " + worker, e);
-      throw new IllegalStateException("stub instance creation must not fail");
-    }
+    return WorkerStubs.get(worker);
   }
 
   @Override
@@ -1681,18 +1658,7 @@ public class ServerInstance extends NodeInstance {
   }
 
   private void removeMalfunctioningWorker(String worker, Throwable t, String context) {
-    try {
-      if (backplane.removeWorker(worker, format("%s: %s", context, t.getMessage()))) {
-        log.log(
-            Level.WARNING,
-            format("Removed worker '%s' during(%s) due to exception", worker, context),
-            t);
-      }
-    } catch (IOException e) {
-      throw Status.fromThrowable(e).asRuntimeException();
-    }
-
-    workerStubs.invalidate(worker);
+    removeMalfunctioningWorker(backplane, worker, t, context, workerStubs);
   }
 
   @Override

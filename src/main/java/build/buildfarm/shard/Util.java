@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package build.buildfarm.instance.shard;
+package build.buildfarm.shard;
 
 import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.google.common.util.concurrent.Futures.transform;
@@ -24,7 +24,9 @@ import build.buildfarm.backplane.Backplane;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.grpc.Retrier;
 import build.buildfarm.instance.Instance;
+import build.buildfarm.instance.stub.StubInstance;
 import build.buildfarm.v1test.Digest;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
@@ -220,5 +222,20 @@ public final class Util {
           }
         },
         directExecutor());
+  }
+
+  public static void removeMalfunctioningWorker(Backplane backplane, String worker, Throwable t, String context, LoadingCache<String, ? extends Instance> workerInstances) {
+    try {
+      if (backplane.removeWorker(worker, format("%s: %s", context, t.getMessage()))) {
+        log.log(
+            Level.WARNING,
+            format("Removed worker '%s' during(%s) due to exception", worker, context),
+            t);
+      }
+    } catch (IOException e) {
+      throw Status.fromThrowable(e).asRuntimeException();
+    }
+
+    workerInstances.invalidate(worker);
   }
 }

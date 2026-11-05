@@ -6,7 +6,7 @@ java_test(
     srcs = ["ShardActionCacheTest.java"],
     test_class = "build.buildfarm.AllTests",
     deps = [
-        "//src/main/java/build/buildfarm/actioncache",
+        "//src/main/java/build/buildfarm/ac",
         "//src/main/java/build/buildfarm/backplane",
         "//src/main/java/build/buildfarm/common",
         "//src/main/protobuf/build/buildfarm/v1test:buildfarm_java_proto",
