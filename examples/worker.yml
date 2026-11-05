@@ -1,3 +1,6 @@
+capabilities:
+  cas: true
+  execution: false
 publicName: localhost:8981
 dequeueMatchSettings:
   allowUnmatched: true
