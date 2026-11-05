@@ -120,6 +120,9 @@ public class CFCExecFileSystem implements ExecFileSystem {
     // only valid path under root is cache
     for (Dirent dirent : dirents) {
       String name = dirent.getName();
+      if (name.equals("ac.txt")) {
+        continue;
+      }
       Path child = root.resolve(name);
       if (!child.equals(fileCache.getRoot())) {
         removeDirectoryFutures.add(

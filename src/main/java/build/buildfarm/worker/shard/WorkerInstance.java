@@ -23,6 +23,7 @@ import build.bazel.remote.execution.v2.ExecutionPolicy;
 import build.bazel.remote.execution.v2.ExecutionStage;
 import build.bazel.remote.execution.v2.RequestMetadata;
 import build.bazel.remote.execution.v2.ResultsCachePolicy;
+import build.buildfarm.actioncache.ActionCache;
 import build.buildfarm.backplane.Backplane;
 import build.buildfarm.cas.ContentAddressableStorage;
 import build.buildfarm.common.CasIndexResults;
@@ -65,24 +66,9 @@ public class WorkerInstance extends NodeInstance {
   private final Backplane backplane;
 
   public WorkerInstance(
-      String name, Backplane backplane, ContentAddressableStorage contentAddressableStorage) {
-    super(name, contentAddressableStorage, null, null, null, null, false);
+      String name, Backplane backplane, ContentAddressableStorage contentAddressableStorage, ActionCache actionCache) {
+    super(name, contentAddressableStorage, actionCache, null, null, null, false);
     this.backplane = backplane;
-  }
-
-  @Override
-  public ListenableFuture<ActionResult> getActionResult(
-      ActionKey actionKey, RequestMetadata requestMetadata) {
-    return immediateFailedFuture(new UnsupportedOperationException());
-  }
-
-  @Override
-  public void putActionResult(ActionKey actionKey, ActionResult actionResult) {
-    try {
-      backplane.putActionResult(actionKey, actionResult);
-    } catch (IOException e) {
-      throw Status.fromThrowable(e).asRuntimeException();
-    }
   }
 
   @Override

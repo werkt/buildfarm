@@ -33,7 +33,10 @@ import build.bazel.remote.execution.v2.Compressor;
 import build.bazel.remote.execution.v2.ExecuteResponse;
 import build.bazel.remote.execution.v2.ExecutedActionMetadata;
 import build.bazel.remote.execution.v2.RequestMetadata;
+import build.buildfarm.actioncache.ActionCache;
+import build.buildfarm.actioncache.FileSystemActionCache;
 import build.buildfarm.backplane.Backplane;
+import build.buildfarm.backplane.FileSystemBackplane;
 import build.buildfarm.cas.ContentAddressableStorage;
 import build.buildfarm.cas.ContentAddressableStorage.Blob;
 import build.buildfarm.cas.MemoryCAS;
@@ -66,6 +69,8 @@ import build.buildfarm.instance.shard.WorkerStubs;
 import build.buildfarm.instance.shard.codec.ShardCodec;
 import build.buildfarm.instance.stub.StubInstance;
 import build.buildfarm.metrics.prometheus.PrometheusPublisher;
+import build.buildfarm.server.services.CapabilitiesService;
+import build.buildfarm.server.services.ActionCacheService;
 import build.buildfarm.v1test.Digest;
 import build.buildfarm.v1test.PipelineChange;
 import build.buildfarm.v1test.QueuedOperationMetadata;
@@ -209,6 +214,7 @@ public final class Worker extends LoggingMain {
   private Server server;
   private Path root;
   private ExecFileSystem execFileSystem;
+  private FileSystemActionCache actionCache;
   private Pipeline pipeline;
   private PipelineStage matchStage;
   private ShardWorkerContext context;
@@ -290,11 +296,14 @@ public final class Worker extends LoggingMain {
       ServerBuilder<?> serverBuilder,
       Instance instance,
       WorkerProfileService workerProfileService) {
-    serverBuilder.addService(healthStatusManager.getHealthService());
-    serverBuilder.addService(new ContentAddressableStorageService(instance));
-    serverBuilder.addService(new ByteStreamService(instance));
-    serverBuilder.addService(new WorkerControl(this));
-    serverBuilder.addService(ProtoReflectionServiceV1.newInstance());
+    serverBuilder
+        .addService(healthStatusManager.getHealthService())
+        .addService(new CapabilitiesService(instance))
+        .addService(new ContentAddressableStorageService(instance))
+        .addService(new ActionCacheService(instance, /* isWritable= */ true))
+        .addService(new ByteStreamService(instance))
+        .addService(new WorkerControl(this))
+        .addService(ProtoReflectionServiceV1.newInstance());
     if (configs.getWorker().isGrpcChannelz()) {
       serverBuilder.addService(ChannelzService.newInstance(/* maxPageSize= */ 100));
     }
@@ -737,7 +746,8 @@ public final class Worker extends LoggingMain {
         WorkerStubs.create(
             Duration.newBuilder().setSeconds(configs.getServer().getGrpcTimeout()).build());
 
-    if (SHARD.equals(configs.getBackplane().getType())) {
+    switch (configs.getBackplane().getType()) {
+    case SHARD:
       backplane =
           new RedisShardBackplane(
               identifier,
@@ -1024,8 +1034,10 @@ public final class Worker extends LoggingMain {
             configs.getWorker().getExecOwner(),
             execOwners,
             workerEventObserver);
+    DigestUtil acDigestUtil = new DigestUtil(HashFunction.BLAKE3);
+    actionCache = new FileSystemActionCache(root.resolve("ac.txt"), storage, acDigestUtil, removeDirectoryService);
 
-    instance = new WorkerInstance(configs.getWorker().getPublicName(), backplane, storage);
+    instance = new WorkerInstance(configs.getWorker().getPublicName(), backplane, storage, actionCache);
 
     // Create the appropriate writer for the context
     CasWriter writer;
@@ -1252,6 +1264,9 @@ public final class Worker extends LoggingMain {
     healthCheckMetric.labels("stop").inc();
     executionSlotsTotal.set(0);
     inputFetchSlotsTotal.set(0);
+    if (actionCache != null) {
+      actionCache.stop();
+    }
     if (execFileSystem != null) {
       log.info("Stopping exec filesystem");
       try {

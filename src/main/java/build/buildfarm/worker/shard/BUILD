@@ -6,6 +6,7 @@ java_library(
     plugins = ["//src/main/java/build/buildfarm/common:lombok"],
     visibility = ["//visibility:public"],
     deps = [
+        "//src/main/java/build/buildfarm/actioncache",
         "//src/main/java/build/buildfarm/backplane",
         "//src/main/java/build/buildfarm/cas",
         "//src/main/java/build/buildfarm/common",
@@ -18,6 +19,7 @@ java_library(
         "//src/main/java/build/buildfarm/instance/shard",
         "//src/main/java/build/buildfarm/instance/stub",
         "//src/main/java/build/buildfarm/metrics/prometheus",
+        "//src/main/java/build/buildfarm/server/services",
         "//src/main/java/build/buildfarm/worker",
         "//src/main/java/build/buildfarm/worker/cgroup",
         "//src/main/java/build/buildfarm/worker/resources",
